@@ -1,75 +1,32 @@
 # Requirements Review Agent
 
-A TypeScript-based multi-agent application for reviewing software requirements using the Claude Agent SDK.
+A TypeScript application for reviewing Markdown software requirements through Codex CLI.
+It checks ambiguity, incomplete requirements, missing acceptance criteria, contradictions and broken references.
 
-It analyzes Markdown requirements documents and produces structured findings for ambiguity, missing information, untestable acceptance criteria, conflicting requirements, and broken references.
+## Setup
 
-## How it works
-
-The application combines deterministic document analysis with specialized AI reviews:
-
-- **Requirements index:** a custom in-process MCP tool extracts requirement IDs, references, and acceptance-criteria markers, and identifies structural issues.
-- **Completeness reviewer:** checks for missing information and ambiguous requirements.
-- **Testability reviewer:** checks whether expected behavior is expressed as verifiable acceptance criteria.
-- **Consistency reviewer:** looks for contradictions and invalid cross-references.
-- **Review coordinator:** delegates to the specialized agents and validates a structured JSON report.
-
-The agents use read-only tools. Reviews support configurable cost limits, retry handling, local result caching, and optional verbose logging.
-
-## Architecture
-
-```text
-Markdown requirements
-        │
-        ▼
-CLI (src/index.ts)
-        │
-        ▼
-Review coordinator (src/review.ts)
-        ├── Completeness agent
-        ├── Testability agent
-        ├── Consistency agent
-        ├── Custom MCP requirements index
-        └── Structured output validation (Zod)
-        │
-        ▼
-Findings + run metadata
-```
-
-## Getting started
-
-Prerequisites: Node.js 20+, pnpm, and access to Claude through the Claude Agent SDK.
+Requires Node.js 20+, pnpm, and an installed Codex CLI authenticated with an account that has Codex access:
 
 ```bash
+codex login
 pnpm install
-pnpm test
-pnpm typecheck
 pnpm review eval/cases/broken-ref.md
 ```
 
-Use an Anthropic API key through `ANTHROPIC_API_KEY`, or authenticate using a supported Claude login.
+Claude and an Anthropic subscription or API key are no longer required. The model still runs through Codex; this is not an offline model. Usage follows the limits and billing of your Codex authentication.
 
-To save the structured report:
+## Review
 
 ```bash
-pnpm review eval/cases/broken-ref.md --out report.json
+pnpm review requirements.md --out report.json
+pnpm review requirements.md --model MODEL --no-cache -v
 ```
 
-Useful options include `--model`, `--budget`, `--no-cache`, and `-v` for verbose execution logs.
+The default model comes from your Codex configuration. The runner builds a deterministic requirements index, then sends the document and index to `codex exec` with a JSON output schema and a read-only sandbox. A single Codex call applies three review perspectives (completeness, testability, consistency); these are not separate subagents or an MCP server. The resulting report is validated with Zod.
 
-## Example finding
-
-```text
-[high] contradiction REQ-003 — Row limit conflicts with REQ-001
-    Two requirements define different maximum row counts.
-    → Align the limits and reference the shared rule.
-```
-
-Each finding includes a type, severity, requirement reference, explanation, suggested resolution, and the reviewing agent.
+Reviews time out after five minutes. Cache entries include the document, model selection, prompts and schema. When changing your configured default model, use `--no-cache`. CLI monetary cost is unavailable and is recorded as `null`; no dollar budget is enforced. Reports are saved under `runs/`.
 
 ## Evaluation
-
-The `eval/cases` directory contains eight example requirements documents with expected findings, including both intentionally flawed and clean examples. The evaluation runner compares generated findings against the expected `(type, requirement_id)` pairs and reports true positives, false positives, false negatives, precision, and recall.
 
 ```bash
 pnpm eval
@@ -77,26 +34,19 @@ pnpm eval --case broken-ref
 pnpm eval --no-cache
 ```
 
-Reports are saved under `eval/results/`. Evaluation metrics depend on the model and run configuration; no fixed performance results are claimed here.
+Eight fixtures include flawed and clean requirements. The runner compares findings against expected `(type, requirement_id)` pairs and reports precision, recall, false positives and false negatives. Reports are saved under `eval/results/`. Evaluation requires the same Codex access as review.
 
-## Project structure
+## Local checks
 
-```text
-src/
-  index.ts                    CLI entry point
-  review.ts                   SDK execution, result validation, caching
-  agents.ts                   Specialized agent definitions
-  schema.ts                   Structured finding schema
-  mcp/requirements.ts         Custom MCP requirements index
-  mcp/requirements.test.ts    Parser tests
-eval/
-  cases/                      Example documents and expected findings
-  run.ts                      Precision/recall evaluation runner
+```bash
+pnpm test
+pnpm typecheck
+pnpm build
 ```
 
-## Technology
+These checks do not call an AI service. The deterministic parser lives in `src/mcp/requirements.ts` (the path is retained for compatibility).
 
-TypeScript · Claude Agent SDK · Model Context Protocol (MCP) · Zod · Node.js · pnpm
+[Codex non-interactive execution documentation](https://learn.chatgpt.com/docs/non-interactive-mode)
 
 ## License
 

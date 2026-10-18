@@ -1,19 +1,18 @@
 {
   "name": "requirements-review-agent",
   "version": "0.1.0",
-  "description": "Multi-agent requirements reviewer built on the Claude Agent SDK: specialised subagents, a custom MCP tool and an eval harness.",
+  "description": "Requirements reviewer powered by Codex CLI, with three review perspectives and an eval harness.",
   "type": "module",
   "license": "MIT",
   "engines": { "node": ">=20" },
   "scripts": {
     "review": "tsx src/index.ts",
     "eval": "tsx eval/run.ts",
-    "test": "tsx --test src/mcp/requirements.test.ts",
+    "test": "tsx --test src/mcp/requirements.test.ts src/review.test.ts",
     "typecheck": "tsc --noEmit",
     "build": "tsc"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.3.302",
     "zod": "^4.0.0"
   },
   "devDependencies": {

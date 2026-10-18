@@ -1,7 +1,3 @@
-import { createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk";
-import { readFile } from "node:fs/promises";
-import { z } from "zod";
-
 export const REQ_ID = /\bREQ-\d+\b/g;
 const HEADING = /^#{1,6}\s+(REQ-\d+)\b[:\s-]*(.*)$/;
 
@@ -61,24 +57,3 @@ export function indexRequirements(markdown: string): RequirementsIndex {
 
   return { requirements, duplicate_ids, broken_references, unreferenced };
 }
-
-export const requirementsIndexTool = tool(
-  "requirements_index",
-  "Parse a markdown requirements document and return a deterministic index: every REQ-NNN heading with its title, line number, outgoing references and whether it has acceptance criteria; plus duplicate ids, broken references (ids referenced but never defined) and requirements nothing refers to. Use this instead of counting ids by hand.",
-  { path: z.string().describe("Absolute or cwd-relative path to the .md file") },
-  async ({ path }) => {
-    try {
-      const index = indexRequirements(await readFile(path, "utf8"));
-      return { content: [{ type: "text", text: JSON.stringify(index, null, 2) }] };
-    } catch (err) {
-      return { content: [{ type: "text", text: `requirements_index failed: ${(err as Error).message}` }], isError: true };
-    }
-  },
-  { annotations: { readOnlyHint: true } },
-);
-
-export const requirementsServer = createSdkMcpServer({
-  name: "requirements",
-  version: "0.1.0",
-  tools: [requirementsIndexTool],
-});

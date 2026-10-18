@@ -5,7 +5,7 @@ import { review } from "../src/review.ts";
 import type { Finding } from "../src/schema.ts";
 
 interface Expected { type: Finding["type"]; requirement_id: string | null }
-interface CaseResult { name: string; tp: number; fp: number; fn: number; cost_usd: number; missed: Expected[]; extra: Expected[] }
+interface CaseResult { name: string; tp: number; fp: number; fn: number; cost_usd: number | null; missed: Expected[]; extra: Expected[] }
 
 const { values } = parseArgs({
   options: {
@@ -39,7 +39,7 @@ for (const name of names) {
 
   const r: CaseResult = { name, tp: matched.size, fp: extra.length, fn: missed.length, cost_usd: run.cost_usd, missed, extra };
   results.push(r);
-  console.log(`${name.padEnd(28)} tp=${r.tp} fp=${r.fp} fn=${r.fn}${run.cached ? " (cached)" : ` $${run.cost_usd.toFixed(3)}`}`);
+  console.log(`${name.padEnd(28)} tp=${r.tp} fp=${r.fp} fn=${r.fn}${run.cached ? " (cached)" : " (Codex; cost unavailable)"}`);
   for (const m of missed) console.log(`    missed: ${m.type} ${m.requirement_id}`);
   for (const x of extra) console.log(`    extra:  ${x.type} ${x.requirement_id}`);
 }

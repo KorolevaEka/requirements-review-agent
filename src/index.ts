@@ -7,7 +7,6 @@ const { values, positionals } = parseArgs({
   options: {
     out: { type: "string", short: "o" },
     model: { type: "string" },
-    budget: { type: "string", default: "2" },
     "no-cache": { type: "boolean", default: false },
     verbose: { type: "boolean", short: "v", default: false },
   },
@@ -15,7 +14,7 @@ const { values, positionals } = parseArgs({
 
 const file = positionals[0];
 if (!file) {
-  console.error("usage: pnpm review <requirements.md> [--out report.json] [--model opus|sonnet] [--budget 2] [--no-cache] [-v]");
+  console.error("usage: pnpm review <requirements.md> [--out report.json] [--model MODEL] [--no-cache] [-v]");
   process.exit(2);
 }
 
@@ -23,7 +22,6 @@ try {
   const run = await review({
     file,
     model: values.model,
-    maxBudgetUsd: Number(values.budget),
     cache: !values["no-cache"],
     verbose: values.verbose,
   });
@@ -39,7 +37,7 @@ try {
   console.log(
     run.cached
       ? "(served from cache)"
-      : `${run.report.findings.length} findings · ${run.turns} turns · $${run.cost_usd.toFixed(3)} · ${(run.duration_ms / 1000).toFixed(0)}s · subagents: ${run.subagents_invoked.join(", ")}`,
+      : `${run.report.findings.length} findings · ${(run.duration_ms / 1000).toFixed(0)}s · perspectives: ${run.review_perspectives.join(", ")}`,
   );
 } catch (err) {
   console.error((err as Error).message);

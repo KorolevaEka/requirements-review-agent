@@ -11,12 +11,12 @@ export const FINDING_TYPES = [
 export const FindingSchema = z.object({
   type: z.enum(FINDING_TYPES),
   requirement_id: z.string().nullable().describe("Primary REQ id, null when document-level"),
-  related_ids: z.array(z.string()).default([]),
+  related_ids: z.array(z.string()),
   severity: z.enum(["high", "medium", "low"]),
   title: z.string(),
   detail: z.string(),
   suggestion: z.string(),
-  agent: z.string().describe("Which subagent produced the finding"),
+  agent: z.string().describe("Which review perspective produced the finding"),
 });
 
 export const ReviewReportSchema = z.object({
