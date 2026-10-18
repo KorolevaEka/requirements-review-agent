@@ -1,0 +1,3 @@
+{ "findings": [
+  { "type": "contradiction", "requirement_id": "REQ-002" }
+] }

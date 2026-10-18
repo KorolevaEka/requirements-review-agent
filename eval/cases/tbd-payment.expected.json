@@ -1,0 +1,3 @@
+{ "findings": [
+  { "type": "incomplete", "requirement_id": "REQ-002" }
+] }

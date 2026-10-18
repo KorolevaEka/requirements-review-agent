@@ -1,0 +1,4 @@
+{ "findings": [
+  { "type": "missing_acceptance_criteria", "requirement_id": "REQ-001" },
+  { "type": "missing_acceptance_criteria", "requirement_id": "REQ-003" }
+] }

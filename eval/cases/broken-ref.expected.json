@@ -1,0 +1,3 @@
+{ "findings": [
+  { "type": "broken_reference", "requirement_id": "REQ-003" }
+] }
