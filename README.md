@@ -1,102 +1,103 @@
 # Requirements Review Agent
 
-A multi-agent reviewer for software requirements, built on the
-[Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview) in TypeScript.
+A TypeScript-based multi-agent application for reviewing software requirements using the Claude Agent SDK.
 
-Give it a markdown requirements document and it returns a structured list of defects:
-vague wording, TBD placeholders, requirements without acceptance criteria, contradictions
-between requirements, and references to requirements that do not exist.
+It analyzes Markdown requirements documents and produces structured findings for ambiguity, missing information, untestable acceptance criteria, conflicting requirements, and broken references.
 
-Output shape (one line per finding, then run stats):
+## How it works
 
-```
-[high] contradiction REQ-003 — Row limit conflicts with REQ-001
-    REQ-001 says "Maximum 5,000 rows per file", REQ-003 says "at most 10,000 rows".
-    → Pick one limit and reference it from the other requirement.  (consistency-reviewer)
+The application combines deterministic document analysis with specialized AI reviews:
 
-N findings · T turns · $cost · Ns · subagents: completeness-reviewer, consistency-reviewer, testability-reviewer
-```
+- **Requirements index:** a custom in-process MCP tool extracts requirement IDs, references, and acceptance-criteria markers, and identifies structural issues.
+- **Completeness reviewer:** checks for missing information and ambiguous requirements.
+- **Testability reviewer:** checks whether expected behavior is expressed as verifiable acceptance criteria.
+- **Consistency reviewer:** looks for contradictions and invalid cross-references.
+- **Review coordinator:** delegates to the specialized agents and validates a structured JSON report.
 
-## Why this exists
-
-Reviewing requirements is a judgement task, but parts of it are mechanical: counting ids,
-following cross-references, checking that every requirement has an acceptance-criteria block.
-Models are unreliable at exactly those parts. This project splits the work accordingly:
-
-- **An MCP tool** (`requirements_index`) does the deterministic part: parses `REQ-NNN` headings,
-  collects outgoing references, flags broken references, duplicates and missing acceptance criteria.
-- **Three specialised subagents** do the judgement, each owning a distinct slice of the finding
-  taxonomy so they do not step on each other and so the eval can attribute misses.
-- **An orchestrator** only delegates and merges. Its output is constrained to a JSON schema.
-- **An eval harness** replays eight documents with planted defects and reports precision and recall.
+The agents use read-only tools. Reviews support configurable cost limits, retry handling, local result caching, and optional verbose logging.
 
 ## Architecture
 
+```text
+Markdown requirements
+        │
+        ▼
+CLI (src/index.ts)
+        │
+        ▼
+Review coordinator (src/review.ts)
+        ├── Completeness agent
+        ├── Testability agent
+        ├── Consistency agent
+        ├── Custom MCP requirements index
+        └── Structured output validation (Zod)
+        │
+        ▼
+Findings + run metadata
 ```
-pnpm review <file.md>
-  └─ src/index.ts              CLI (node:util parseArgs)
-      └─ src/review.ts         orchestration: cache → query() → validate → persist
-          ├─ src/agents.ts     3 AgentDefinitions (sonnet, read-only tools)
-          │    completeness-reviewer  → incomplete, ambiguity
-          │    testability-reviewer   → missing_acceptance_criteria
-          │    consistency-reviewer   → contradiction, broken_reference
-          ├─ src/mcp/requirements.ts  in-process MCP server with requirements_index
-          └─ src/schema.ts     zod schema → JSON schema for structured output
-eval/run.ts                     precision / recall over eval/cases/*.md
-```
 
-**Tool calling.** The orchestrator is allowed `Read`, `Agent` and the custom MCP tool only.
-Subagents get `Read` plus the MCP tool where it helps them; none can write or run commands.
+## Getting started
 
-**State.** Each run is keyed by a content hash of the input. A finished review is written to
-`.cache/<hash>.json` and replayed on the next call for the same content, so eval reruns after a
-prompt change only pay for documents whose expectations or text changed when you pass `--no-cache`.
-Every run is also appended to `runs/` with cost, turns, duration and which subagents were invoked.
-
-**Error handling.** The query loop is wrapped in exponential-backoff retry (3 attempts). Result
-subtypes that retrying cannot fix (`error_max_turns`, `error_max_budget_usd`) and authentication
-errors are surfaced immediately. The final JSON is validated with zod before anything is persisted,
-so a malformed model answer fails loudly rather than producing a half-empty report. A per-run budget
-(`--budget`, default $2) and `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=1` bound cost and fan-out.
-
-## Running it
-
-Requires Node 20+ and pnpm. Authenticate once with either an API key or a Claude login:
+Prerequisites: Node.js 20+, pnpm, and access to Claude through the Claude Agent SDK.
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...   # or: claude login
 pnpm install
-pnpm test                              # parser unit test, no API calls
-pnpm review eval/cases/broken-ref.md -v
-pnpm eval                              # all cases; add --case <name> for one
+pnpm test
+pnpm typecheck
+pnpm review eval/cases/broken-ref.md
 ```
 
-`-v` logs every tool call and subagent dispatch to stderr. `--out report.json` writes the raw report.
+Use an Anthropic API key through `ANTHROPIC_API_KEY`, or authenticate using a supported Claude login.
 
-## Eval
+To save the structured report:
 
-`eval/cases/` holds eight short requirement documents. Six have planted defects; two are clean
-and exist to catch false positives. Each `*.expected.json` lists the expected findings as
-`(type, requirement_id)` pairs. A finding matches if the type is equal and the id is either the
-primary `requirement_id` or in `related_ids` (so a contradiction may be reported from either side).
+```bash
+pnpm review eval/cases/broken-ref.md --out report.json
+```
 
-The runner prints `tp / fp / fn` per case, the misses and extras by `(type, id)`, and aggregate
-precision and recall. Current numbers will be added here after the first full run.
+Useful options include `--model`, `--budget`, `--no-cache`, and `-v` for verbose execution logs.
 
-Results are written to `eval/results/<timestamp>.json`, so prompt changes can be compared run to run.
+## Example finding
 
-## Finding taxonomy
+```text
+[high] contradiction REQ-003 — Row limit conflicts with REQ-001
+    Two requirements define different maximum row counts.
+    → Align the limits and reference the shared rule.
+```
 
-| type | owner | example |
-|---|---|---|
-| `ambiguity` | completeness-reviewer | "export should be fast" |
-| `incomplete` | completeness-reviewer | "fee percentage is TBD" |
-| `missing_acceptance_criteria` | testability-reviewer | requirement with no verifiable criteria |
-| `contradiction` | consistency-reviewer | 15-minute idle timeout vs 24-hour session |
-| `broken_reference` | consistency-reviewer | "as defined in REQ-012" where REQ-012 does not exist |
+Each finding includes a type, severity, requirement reference, explanation, suggested resolution, and the reviewing agent.
 
-## Document format
+## Evaluation
 
-Any markdown where each requirement is a heading of the form `### REQ-001: Title`. Body text
-until the next `REQ-` heading belongs to that requirement. An "Acceptance criteria" line or a
-Given/When/Then block marks the requirement as having criteria. See `eval/cases/` for examples.
+The `eval/cases` directory contains eight example requirements documents with expected findings, including both intentionally flawed and clean examples. The evaluation runner compares generated findings against the expected `(type, requirement_id)` pairs and reports true positives, false positives, false negatives, precision, and recall.
+
+```bash
+pnpm eval
+pnpm eval --case broken-ref
+pnpm eval --no-cache
+```
+
+Reports are saved under `eval/results/`. Evaluation metrics depend on the model and run configuration; no fixed performance results are claimed here.
+
+## Project structure
+
+```text
+src/
+  index.ts                    CLI entry point
+  review.ts                   SDK execution, result validation, caching
+  agents.ts                   Specialized agent definitions
+  schema.ts                   Structured finding schema
+  mcp/requirements.ts         Custom MCP requirements index
+  mcp/requirements.test.ts    Parser tests
+eval/
+  cases/                      Example documents and expected findings
+  run.ts                      Precision/recall evaluation runner
+```
+
+## Technology
+
+TypeScript · Claude Agent SDK · Model Context Protocol (MCP) · Zod · Node.js · pnpm
+
+## License
+
+MIT — see [LICENSE](LICENSE).

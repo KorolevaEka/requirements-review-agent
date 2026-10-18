@@ -4,3 +4,4 @@ dist/
 runs/
 eval/results/
 .env
+.idea/
