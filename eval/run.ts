@@ -2,55 +2,46 @@ import { readdir, readFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { review } from "../src/review.ts";
-import type { Finding } from "../src/schema.ts";
+import { score, type Expected } from "./scoring.ts";
 
-interface Expected { type: Finding["type"]; requirement_id: string | null }
-interface CaseResult { name: string; tp: number; fp: number; fn: number; cost_usd: number | null; missed: Expected[]; extra: Expected[] }
+const controller = new AbortController();
+process.once("SIGINT", () => controller.abort());
+process.once("SIGTERM", () => controller.abort());
 
-const { values } = parseArgs({
-  options: {
-    case: { type: "string" },
-    "no-cache": { type: "boolean", default: false },
-  },
-});
-
-const casesDir = path.join(import.meta.dirname, "cases");
-const names = (await readdir(casesDir))
-  .filter((f) => f.endsWith(".md"))
-  .map((f) => f.replace(/\.md$/, ""))
-  .filter((n) => !values.case || n === values.case);
-
-const matches = (f: Finding, e: Expected) =>
-  f.type === e.type && (f.requirement_id === e.requirement_id || (e.requirement_id !== null && f.related_ids.includes(e.requirement_id)));
-
+const { values } = parseArgs({ options: {
+  case: { type: "string" },
+  model: { type: "string" },
+  repeat: { type: "string", default: "1" },
+  suite: { type: "string", default: "cases" },
+  "no-cache": { type: "boolean", default: false },
+} });
+const repetitions = Number(values.repeat);
+if (!Number.isInteger(repetitions) || repetitions < 1) throw new Error("--repeat must be a positive integer");
+if (!["cases", "holdout"].includes(values.suite!)) throw new Error("--suite must be cases or holdout");
+const casesDir = path.join(import.meta.dirname, values.suite!);
+const names = (await readdir(casesDir)).filter(f => f.endsWith(".md")).map(f => f.slice(0, -3)).sort().filter(n => !values.case || n === values.case);
+if (!names.length) throw new Error(`No eval cases match: ${values.case ?? values.suite}`);
+if (!values.model) throw new Error("Specify --model MODEL for reproducible evaluation");
+type CaseResult = ReturnType<typeof score> & { name: string; repetition: number; duration_ms: number; cached: boolean; cli_version: string };
 const results: CaseResult[] = [];
-for (const name of names) {
-  const expected: Expected[] = JSON.parse(await readFile(path.join(casesDir, `${name}.expected.json`), "utf8")).findings;
-  const run = await review({ file: path.join(casesDir, `${name}.md`), cache: !values["no-cache"] });
-  const found = run.report.findings;
-
-  const matched = new Set<Finding>();
-  const missed = expected.filter((e) => {
-    const hit = found.find((f) => !matched.has(f) && matches(f, e));
-    if (hit) matched.add(hit);
-    return !hit;
-  });
-  const extra = found.filter((f) => !matched.has(f)).map((f) => ({ type: f.type, requirement_id: f.requirement_id }));
-
-  const r: CaseResult = { name, tp: matched.size, fp: extra.length, fn: missed.length, cost_usd: run.cost_usd, missed, extra };
-  results.push(r);
-  console.log(`${name.padEnd(28)} tp=${r.tp} fp=${r.fp} fn=${r.fn}${run.cached ? " (cached)" : " (Codex; cost unavailable)"}`);
-  for (const m of missed) console.log(`    missed: ${m.type} ${m.requirement_id}`);
-  for (const x of extra) console.log(`    extra:  ${x.type} ${x.requirement_id}`);
+for (let repetition = 1; repetition <= repetitions; repetition++) {
+  for (const name of names) {
+    const expected: Expected[] = JSON.parse(await readFile(path.join(casesDir, `${name}.expected.json`), "utf8")).findings;
+    const run = await review({ file: path.join(casesDir, `${name}.md`), model: values.model, signal: controller.signal, cache: repetitions === 1 && !values["no-cache"] });
+    const result = { name, repetition, ...score(run.report.findings, expected), duration_ms: run.duration_ms, cached: run.cached, cli_version: run.cli_version };
+    results.push(result);
+    console.log(`[${repetition}/${repetitions}] ${name}: tp=${result.tp} fp=${result.fp} fn=${result.fn}${run.cached ? " (cached)" : ""}`);
+  }
 }
-
-const tp = results.reduce((s, r) => s + r.tp, 0);
-const fp = results.reduce((s, r) => s + r.fp, 0);
-const fn = results.reduce((s, r) => s + r.fn, 0);
-const precision = tp / Math.max(1, tp + fp);
-const recall = tp / Math.max(1, tp + fn);
-console.log(`\nprecision ${(precision * 100).toFixed(0)}%  recall ${(recall * 100).toFixed(0)}%  (tp=${tp} fp=${fp} fn=${fn}, ${results.length} cases)`);
-
+const metrics = (rows: typeof results) => {
+  const tp = rows.reduce((s, r) => s + r.tp, 0), fp = rows.reduce((s, r) => s + r.fp, 0), fn = rows.reduce((s, r) => s + r.fn, 0);
+  return { tp, fp, fn, precision: tp / Math.max(1, tp + fp), recall: tp / Math.max(1, tp + fn) };
+};
+const aggregate = metrics(results);
+const per_run = Array.from({ length: repetitions }, (_, i) => ({ repetition: i + 1, ...metrics(results.filter(r => r.repetition === i + 1)) }));
+console.log(`precision ${(aggregate.precision * 100).toFixed(1)}% recall ${(aggregate.recall * 100).toFixed(1)}% (${names.length} cases × ${repetitions} runs)`);
+const dataset_hash = (await import("node:crypto")).createHash("sha256");
+for (const name of names) for (const extension of ["md", "expected.json"]) dataset_hash.update(await readFile(path.join(casesDir, `${name}.${extension}`)));
 const outDir = path.join(import.meta.dirname, "results");
 await mkdir(outDir, { recursive: true });
-await writeFile(path.join(outDir, `${new Date().toISOString().replace(/[:.]/g, "-")}.json`), JSON.stringify({ precision, recall, results }, null, 2));
+await writeFile(path.join(outDir, `${new Date().toISOString().replace(/[:.]/g, "-")}.json`), JSON.stringify({ provider: "codex", model: values.model, suite: values.suite, dataset_hash: dataset_hash.digest("hex"), repetitions, ...aggregate, per_run, results }, null, 2));

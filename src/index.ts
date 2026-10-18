@@ -2,6 +2,10 @@ import { parseArgs } from "node:util";
 import { writeFile } from "node:fs/promises";
 import { review } from "./review.ts";
 
+const controller = new AbortController();
+process.once("SIGINT", () => controller.abort());
+process.once("SIGTERM", () => controller.abort());
+
 const { values, positionals } = parseArgs({
   allowPositionals: true,
   options: {
@@ -21,6 +25,7 @@ if (!file) {
 try {
   const run = await review({
     file,
+    signal: controller.signal,
     model: values.model,
     cache: !values["no-cache"],
     verbose: values.verbose,

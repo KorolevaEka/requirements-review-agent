@@ -24,14 +24,14 @@ pnpm review requirements.md --model MODEL --no-cache -v
 
 The default model comes from your Codex configuration. The runner builds a deterministic requirements index, then sends the document and index to `codex exec` with a JSON output schema and a read-only sandbox. A single Codex call applies three review perspectives (completeness, testability, consistency); these are not separate subagents or an MCP server. The resulting report is validated with Zod.
 
-Reviews time out after five minutes. Cache entries include the document, model selection, prompts and schema. When changing your configured default model, use `--no-cache`. CLI monetary cost is unavailable and is recorded as `null`; no dollar budget is enforced. Reports are saved under `runs/`.
+Reviews time out after five minutes. Cache entries include the document, explicit model, CLI version, prompts and schema. Reviews without an explicit model bypass cache. CLI monetary cost is unavailable and is recorded as `null`; no dollar budget is enforced. Reports are saved under `runs/`.
 
 ## Evaluation
 
 ```bash
-pnpm eval
-pnpm eval --case broken-ref
-pnpm eval --no-cache
+pnpm eval --model MODEL
+pnpm eval --model MODEL --case broken-ref
+pnpm eval --model MODEL --repeat 3
 ```
 
 Eight fixtures include flawed and clean requirements. The runner compares findings against expected `(type, requirement_id)` pairs and reports precision, recall, false positives and false negatives. Reports are saved under `eval/results/`. Evaluation requires the same Codex access as review.
@@ -51,3 +51,5 @@ These checks do not call an AI service. The deterministic parser lives in `src/m
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+This branch is an alternative implementation. The original Claude Agent SDK / subagents / MCP architecture remains on `main`. See [evaluation evidence and comparison instructions](docs/evals/README.md).

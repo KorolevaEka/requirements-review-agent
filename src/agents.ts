@@ -1,8 +1,8 @@
 import { FINDING_TYPES } from "./schema.ts";
 
-const SHARED = `Report findings as a JSON array (no prose around it). Each finding:
+const SHARED = `Add findings to the final report findings array. Each finding:
 {"type": <one of ${FINDING_TYPES.join(" | ")}>, "requirement_id": "REQ-NNN" | null, "related_ids": [], "severity": "high"|"medium"|"low", "title": "...", "detail": "...", "suggestion": "..."}.
-Only report defects you can point to in the text. Quote the offending phrase in "detail". If the document is clean for your dimension, return [].`;
+Only report defects you can point to in the text. Quote the offending phrase in "detail". If the document is clean for your dimension, add no findings.`;
 
 export const reviewAgents: Record<string, { description: string; prompt: string }> = {
   "completeness-reviewer": {

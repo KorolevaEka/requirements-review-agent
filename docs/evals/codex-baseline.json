@@ -1,0 +1,104 @@
+{
+  "precision": 0.6875,
+  "recall": 1,
+  "results": [
+    {
+      "name": "broken-ref",
+      "tp": 1,
+      "fp": 1,
+      "fn": 0,
+      "cost_usd": null,
+      "missed": [],
+      "extra": [
+        {
+          "type": "incomplete",
+          "requirement_id": "REQ-002"
+        }
+      ]
+    },
+    {
+      "name": "clean-login",
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "cost_usd": null,
+      "missed": [],
+      "extra": []
+    },
+    {
+      "name": "clean-notifications",
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "cost_usd": null,
+      "missed": [],
+      "extra": []
+    },
+    {
+      "name": "contradiction-session",
+      "tp": 1,
+      "fp": 2,
+      "fn": 0,
+      "cost_usd": null,
+      "missed": [],
+      "extra": [
+        {
+          "type": "ambiguity",
+          "requirement_id": "REQ-003"
+        },
+        {
+          "type": "missing_acceptance_criteria",
+          "requirement_id": "REQ-004"
+        }
+      ]
+    },
+    {
+      "name": "missing-ac",
+      "tp": 2,
+      "fp": 0,
+      "fn": 0,
+      "cost_usd": null,
+      "missed": [],
+      "extra": []
+    },
+    {
+      "name": "mixed-export",
+      "tp": 4,
+      "fp": 0,
+      "fn": 0,
+      "cost_usd": null,
+      "missed": [],
+      "extra": []
+    },
+    {
+      "name": "tbd-payment",
+      "tp": 1,
+      "fp": 0,
+      "fn": 0,
+      "cost_usd": null,
+      "missed": [],
+      "extra": []
+    },
+    {
+      "name": "vague-performance",
+      "tp": 2,
+      "fp": 2,
+      "fn": 0,
+      "cost_usd": null,
+      "missed": [],
+      "extra": [
+        {
+          "type": "missing_acceptance_criteria",
+          "requirement_id": "REQ-002"
+        },
+        {
+          "type": "contradiction",
+          "requirement_id": "REQ-004"
+        }
+      ]
+    }
+  ],
+  "provider": "codex",
+  "model": "configured-default (not recorded)",
+  "note": "Historical single run against original expectations. Not a Claude SDK result. Not comparable directly with revised expectations."
+}

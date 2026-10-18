@@ -8,7 +8,7 @@
   "scripts": {
     "review": "tsx src/index.ts",
     "eval": "tsx eval/run.ts",
-    "test": "tsx --test src/mcp/requirements.test.ts src/review.test.ts",
+    "test": "tsx --test src/mcp/requirements.test.ts src/review.test.ts eval/scoring.test.ts",
     "typecheck": "tsc --noEmit",
     "build": "tsc"
   },

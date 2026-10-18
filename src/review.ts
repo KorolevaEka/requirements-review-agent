@@ -1,6 +1,7 @@
-import { spawn } from "node:child_process";
+import { spawn, execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { promisify } from "node:util";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { reviewAgents } from "./agents.ts";
@@ -11,6 +12,7 @@ export interface ReviewOptions {
   file: string;
   model?: string;
   timeoutMs?: number;
+  signal?: AbortSignal;
   cache?: boolean;
   verbose?: boolean;
 }
@@ -20,6 +22,7 @@ export interface ReviewRun {
   content_hash: string;
   provider: "codex";
   model: string;
+  cli_version: string;
   report: ReviewReport;
   cost_usd: null;
   duration_ms: number;
@@ -40,17 +43,24 @@ ${Object.entries(reviewAgents).map(([name, agent]) => `\nPerspective: ${name}\n$
 }
 
 export async function review(opts: ReviewOptions): Promise<ReviewRun> {
+  opts.signal?.throwIfAborted();
+  if (opts.timeoutMs !== undefined && (!Number.isFinite(opts.timeoutMs) || opts.timeoutMs <= 0)) throw new ReviewError("timeoutMs must be positive");
+  const cli_version = (await promisify(execFile)("codex", ["--version"], { timeout: 10_000 })).stdout.trim();
   const file = path.resolve(opts.file);
   const content = await readFile(file, "utf8");
   const prompt = buildReviewPrompt(content);
   const model = opts.model ?? "configured-default";
   const content_hash = createHash("sha256").update(content).digest("hex").slice(0, 16);
   // Include the backend, model, prompts and schema so old Claude runs cannot be reused.
-  const key = createHash("sha256").update(JSON.stringify({ backend: "codex-v1", model, prompt, schema: reviewReportJsonSchema })).digest("hex");
+  const key = createHash("sha256").update(JSON.stringify({ backend: "codex-v2", cli_version, model, prompt, schema: reviewReportJsonSchema })).digest("hex");
   const cachePath = path.join(".cache", `codex-${key}.json`);
-  if (opts.cache !== false) {
+  if (opts.cache !== false && opts.model) {
     const hit = await readFile(cachePath, "utf8").catch(() => null);
-    if (hit) return { ...JSON.parse(hit), file, cached: true };
+    if (hit) {
+      const cached = JSON.parse(hit);
+      ReviewReportSchema.parse(cached.report);
+      return { ...cached, file, cached: true };
+    }
   }
   const started = Date.now();
   const temporary = await mkdtemp(path.join(tmpdir(), "requirements-review-"));
@@ -62,7 +72,10 @@ export async function review(opts: ReviewOptions): Promise<ReviewRun> {
     if (opts.model) args.push("--model", opts.model);
     args.push("-");
     await new Promise<void>((resolve, reject) => {
+      opts.signal?.throwIfAborted();
       const child = spawn("codex", args, { cwd: temporary, stdio: ["pipe", "ignore", "pipe"] });
+      const abort = () => child.kill("SIGKILL");
+      opts.signal?.addEventListener("abort", abort, { once: true });
       let stderr = "";
       let timedOut = false;
       const timeout = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, opts.timeoutMs ?? 300_000);
@@ -74,14 +87,16 @@ export async function review(opts: ReviewOptions): Promise<ReviewRun> {
       child.once("error", (err) => { clearTimeout(timeout); reject(new ReviewError(`Cannot start Codex CLI: ${err.message}. Install Codex CLI and run codex login.`)); });
       child.once("close", (code) => {
         clearTimeout(timeout);
-        if (timedOut) reject(new ReviewError("Codex review timed out"));
+        opts.signal?.removeEventListener("abort", abort);
+        if (opts.signal?.aborted) reject(new ReviewError("Codex review cancelled"));
+        else if (timedOut) reject(new ReviewError("Codex review timed out"));
         else if (code !== 0) reject(new ReviewError(`Codex exited with code ${code}: ${stderr}`));
         else resolve();
       });
       child.stdin.end(prompt);
     });
     const report = ReviewReportSchema.parse(JSON.parse(await readFile(outputPath, "utf8")));
-    const run: ReviewRun = { file, content_hash, provider: "codex", model, report, cost_usd: null, duration_ms: Date.now() - started, review_perspectives: Object.keys(reviewAgents), cached: false };
+    const run: ReviewRun = { file, content_hash, provider: "codex", model, cli_version, report, cost_usd: null, duration_ms: Date.now() - started, review_perspectives: Object.keys(reviewAgents), cached: false };
     await mkdir(".cache", { recursive: true });
     await mkdir("runs", { recursive: true });
     await writeFile(cachePath, JSON.stringify(run, null, 2));
