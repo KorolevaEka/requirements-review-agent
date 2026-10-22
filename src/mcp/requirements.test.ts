@@ -24,3 +24,11 @@ Oops.
   assert.deepEqual(idx.broken_references, [{ from: "REQ-002", to: "REQ-009" }]);
   assert.deepEqual(idx.unreferenced, ["REQ-001"]);
 });
+
+test("numeric constraints preserve literal values, context and source lines", async () => {
+  const { extractNumericConstraints } = await import("./requirements.ts");
+  assert.deepEqual(extractNumericConstraints("### REQ-001: Upload\nAt most 5,000 rows within 2 seconds.\nNo limit specified."), [
+    { requirement_id: "REQ-001", line: 2, value: "5,000 rows", context: "At most 5,000 rows within 2 seconds." },
+    { requirement_id: "REQ-001", line: 2, value: "2 seconds", context: "At most 5,000 rows within 2 seconds." },
+  ]);
+});

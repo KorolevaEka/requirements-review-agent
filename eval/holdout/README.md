@@ -1,0 +1,1 @@
+Fresh fixtures introduced after the current prompts were fixed. Do not tune prompts against this set. These are a small synthetic holdout, not an independently audited benchmark. Expand and independently review annotations before making quality claims.

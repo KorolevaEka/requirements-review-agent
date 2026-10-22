@@ -77,8 +77,26 @@ export const requirementsIndexTool = tool(
   { annotations: { readOnlyHint: true } },
 );
 
+export function extractNumericConstraints(markdown: string) {
+  let requirement_id: string | null = null;
+  return markdown.split(/\r?\n/).flatMap((text, i) => {
+    const heading = text.match(HEADING);
+    if (heading) { requirement_id = heading[1]; return []; }
+    return [...text.matchAll(/\b\d+(?:[,.]\d+)*\s*(?:milliseconds?|ms|seconds?|minutes?|hours?|days?|rows?|MB|GB|%)(?![a-z])/gi)]
+      .map(match => ({ requirement_id, line: i + 1, value: match[0], context: text.trim() }));
+  });
+}
+
+export const numericConstraintsTool = tool(
+  "numeric_constraints",
+  "Extract explicit numeric limits with units, requirement IDs, source lines and context. Values are literal mentions, not inferred contradictions or normalized units.",
+  { path: z.string() },
+  async ({ path }) => ({ content: [{ type: "text", text: JSON.stringify(extractNumericConstraints(await readFile(path, "utf8"))) }] }),
+  { annotations: { readOnlyHint: true } },
+);
+
 export const requirementsServer = createSdkMcpServer({
   name: "requirements",
   version: "0.1.0",
-  tools: [requirementsIndexTool],
+  tools: [requirementsIndexTool, numericConstraintsTool],
 });

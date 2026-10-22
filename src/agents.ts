@@ -30,10 +30,10 @@ ${SHARED}`,
     description: "Finds contradictions between requirements and references to requirements that do not exist.",
     prompt: `You review requirements for internal consistency. Read the document at the path you are given.
 Call the requirements_index tool first. Every entry in broken_references is a type "broken_reference" finding (requirement_id = from, related_ids = [to]). Duplicate ids are "broken_reference" too.
-Then read the full text and report type "contradiction" where two requirements cannot both hold (conflicting numbers, limits, timeouts, mutually exclusive behaviour). Put one id in requirement_id and the other(s) in related_ids.
+Call numeric_constraints to locate numeric limits, then compare their context in the full text. Different scopes or compatible units are not contradictions. Then read the full text and report type "contradiction" where two requirements cannot both hold (conflicting numbers, limits, timeouts, mutually exclusive behaviour). Put one id in requirement_id and the other(s) in related_ids.
 Only report those two types.
 ${SHARED}`,
-    tools: ["Read", "mcp__requirements__requirements_index"],
+    tools: ["Read", "mcp__requirements__requirements_index", "mcp__requirements__numeric_constraints"],
     model: "sonnet",
   },
 };

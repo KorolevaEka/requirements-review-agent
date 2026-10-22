@@ -44,7 +44,7 @@ Prerequisites: Node.js 20+, pnpm, and access to Claude through the Claude Agent 
 pnpm install
 pnpm test
 pnpm typecheck
-pnpm review eval/cases/broken-ref.md
+pnpm review eval/dev/broken-ref.md
 ```
 
 Use an Anthropic API key through `ANTHROPIC_API_KEY`, or authenticate using a supported Claude login.
@@ -52,7 +52,7 @@ Use an Anthropic API key through `ANTHROPIC_API_KEY`, or authenticate using a su
 To save the structured report:
 
 ```bash
-pnpm review eval/cases/broken-ref.md --out report.json
+pnpm review eval/dev/broken-ref.md --out report.json
 ```
 
 Useful options include `--model`, `--budget`, `--no-cache`, and `-v` for verbose execution logs.
@@ -69,7 +69,7 @@ Each finding includes a type, severity, requirement reference, explanation, sugg
 
 ## Evaluation
 
-The `eval/cases` directory contains eight example requirements documents with expected findings, including both intentionally flawed and clean examples. The evaluation runner compares generated findings against the expected `(type, requirement_id)` pairs and reports true positives, false positives, false negatives, precision, and recall.
+The `eval/dev` directory contains eight example requirements documents with expected findings, including both intentionally flawed and clean examples. The evaluation runner compares generated findings against the expected `(type, requirement_id)` pairs; contradictions require the complete unordered set of participating IDs and reports true positives, false positives, false negatives, precision, and recall.
 
 ```bash
 pnpm eval
@@ -90,7 +90,8 @@ src/
   mcp/requirements.ts         Custom MCP requirements index
   mcp/requirements.test.ts    Parser tests
 eval/
-  cases/                      Example documents and expected findings
+  dev/                        Development documents and expected findings
+  holdout/                    Fresh evaluation fixtures; never tune on these
   run.ts                      Precision/recall evaluation runner
 ```
 
@@ -101,3 +102,41 @@ TypeScript · Claude Agent SDK · Model Context Protocol (MCP) · Zod · Node.js
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Offline checks and runtime controls
+
+`pnpm test`, `pnpm typecheck`, `pnpm lint`, and `pnpm build` require no API credentials. GitHub Actions runs the first three on pushes and pull requests. The current lint command enables TypeScript unused-symbol and fallthrough checks; installing ESLint/Biome remains pending because the npm registry was unreachable during this change.
+
+```bash
+pnpm review examples/upload.md --timeout 120000 --markdown report.md --no-cache
+pnpm eval --split dev --repeats 3 --no-cache
+pnpm eval --split dev --repeats 3 --agent-model haiku --no-cache
+pnpm eval --split holdout --repeats 3 --no-cache
+```
+
+The timeout is milliseconds per document, including retries. Ctrl+C aborts the SDK query and retry waits. Budget and turn-limit errors, authentication errors, and invalid structured output are not retried. `--no-cache` disables both cache reads and writes. Cache keys include document content, model settings, budget, turn limit, and an explicit implementation version (bump it when prompts/tools change).
+
+Every uncached attempt writes timestamped SDK messages to `runs/*.trace.jsonl`, including tool-use and tool-result messages exposed by the SDK, session/task metadata and final turns/cost. Failed runs keep their trace. This records the SDK-visible stream rather than claiming access to hidden subagent reasoning. Traces contain document excerpts and tool outputs; `runs/` is gitignored. Markdown output quotes requirement headings with their source line numbers; finding details contain the reviewer’s evidence.
+
+The second MCP tool, `numeric_constraints`, deterministically extracts literal numbers with units, source lines and requirement IDs. It does not infer conflicts or normalize units; the consistency reviewer compares their meaning and scope.
+
+## Evaluation protocol and annotation policy
+
+All eight existing fixtures are **dev** because they have already informed prompts and expectations. `eval/holdout/` contains two fresh synthetic fixtures (clean token revocation and conflicting retention), added after the current prompts were fixed. This is a small smoke-test holdout, not an independently audited benchmark. Expand and independently review it before a final assessment; freeze it and avoid prompt tuning against its results. An unknown case or empty split fails before invoking the API.
+
+- `ambiguity`: text supports materially different interpretations or uses vague wording.
+- `incomplete`: missing required information, explicit TBD/TODO, or an undefined necessary path.
+- `missing_acceptance_criteria`: absent criteria or criteria without a verifiable pass/fail condition. An “Acceptance criteria” heading alone is insufficient. Observable outcomes do not always require a numeric threshold.
+- `contradiction`: incompatible requirements, annotated with **both** IDs. Scope must agree; merely different numbers are insufficient.
+- `broken_reference`: an unresolved reference or duplicate definition.
+
+Independent defects may coexist: “download starts quickly” is both ambiguous and unverifiable. “See Login spec” without supplied criteria is not a testable criterion. Development expectations reflect these rules. Other supplied payment criteria can be observed even when the fee percentage remains TBD, so that fixture keeps its `incomplete` annotation alone.
+
+Repeated evaluations automatically bypass the cache and print min/max/mean precision and recall. Each sample stores its split, models, iteration, costs and case results in `eval/results/`. Keep coordinator model, SDK version and other settings fixed when comparing subagent models. The current $2 budget is **per query attempt**, not a cap across retries or the full evaluation.
+
+| Subagent model | Runs | Precision range | Recall range | Cost |
+| --- | --- | --- | --- | --- |
+| sonnet | Pending credentials | — | — | — |
+| haiku | Pending credentials | — | — | — |
+
+No live repeatability or model-quality claims have been measured. The commands above prepare those measurements; populate this table from saved evaluation samples when credentials are available.

@@ -1,4 +1,0 @@
-{ "findings": [
-  { "type": "ambiguity", "requirement_id": "REQ-002" },
-  { "type": "ambiguity", "requirement_id": "REQ-004" }
-] }

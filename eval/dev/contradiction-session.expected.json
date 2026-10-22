@@ -1,0 +1,15 @@
+{
+  "findings": [
+    {
+      "type": "contradiction",
+      "requirement_id": "REQ-002",
+      "related_ids": [
+        "REQ-005"
+      ]
+    },
+    {
+      "type": "missing_acceptance_criteria",
+      "requirement_id": "REQ-004"
+    }
+  ]
+}

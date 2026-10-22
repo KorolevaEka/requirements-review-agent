@@ -1,0 +1,23 @@
+{
+  "findings": [
+    {
+      "type": "ambiguity",
+      "requirement_id": "REQ-002"
+    },
+    {
+      "type": "missing_acceptance_criteria",
+      "requirement_id": "REQ-002"
+    },
+    {
+      "type": "contradiction",
+      "requirement_id": "REQ-003",
+      "related_ids": [
+        "REQ-001"
+      ]
+    },
+    {
+      "type": "broken_reference",
+      "requirement_id": "REQ-004"
+    }
+  ]
+}

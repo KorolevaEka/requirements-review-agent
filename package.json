@@ -4,13 +4,16 @@
   "description": "Multi-agent requirements reviewer built on the Claude Agent SDK: specialised subagents, a custom MCP tool and an eval harness.",
   "type": "module",
   "license": "MIT",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "review": "tsx src/index.ts",
     "eval": "tsx eval/run.ts",
-    "test": "tsx --test src/mcp/requirements.test.ts",
+    "test": "tsx --test src/*.test.ts src/mcp/*.test.ts eval/*.test.ts",
     "typecheck": "tsc --noEmit",
-    "build": "tsc"
+    "build": "tsc",
+    "lint": "tsc --noEmit --noUnusedLocals --noUnusedParameters --noFallthroughCasesInSwitch"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.302",
